@@ -1,0 +1,5 @@
+@HD	VN:1.4	SO:unsorted
+@SQ	SN:chr19	LN:58617616	M5:85f9f4fc152c58cb7913c06d6b98573a	AS:ta1	UR:ftp://blahblah.fa.gz	SP:Homo sapiens
+@SQ	SN:chr20	LN:64444167	M5:b18e6c531b0bd70e949a7fc20859cb01	AS:ta1	UR:ftp://blahblah.fa.gz	SP:Homo sapiens
+@SQ	SN:chr21	LN:46709983	M5:974dc7aec0b755b19f031418fdedf293	AS:ta1	UR:ftp://blahblah.fa.gz	SP:Homo sapiens
+@SQ	SN:chr22	LN:50818468	M5:ac37ec46683600f808cdd41eac1d55cd	AS:ta1	UR:ftp://blahblah.fa.gz	SP:Homo sapiens
