@@ -12,8 +12,11 @@ sub fetch_input {
     my ($self) = @_;
 
     my $root_output_dir = $self->param_required('output_root');
-    my $assembly_name   = $self->param_required('assembly_name');
     my $index_programs  = $self->param_required('index_programs');
+    
+    my $assembly_name   = $self->param_required('assembly_name');
+#    my $assembly_name   = $self->param_required('annotation_name');
+    
 }
 
 sub run {
