@@ -16,7 +16,7 @@ The data is organised in a directory structure like this
         * indexes
           * _program name_
 
-For assemblies, the pipline requires a fasta file. The pipeline provides
+For assemblies, the pipeline requires a fasta file. The pipeline provides
  * a bgzipped copy of the fasta file, with fai file (for use with [samtools faidx](http://www.htslib.org/doc/samtools.html))
  * a dict file for the fasta (from [picard](http://broadinstitute.github.io/picard/command-line-overview.html#CreateSequenceDictionary))
  * a list of chromosomes and their sizes (for use with various tools, e.g. bedToBigBed)
@@ -28,7 +28,6 @@ For gene annotations, the pipeline requires a GTF file. Each annotation must be 
  * ref_flat and rRNA interval files (for use with [picard](http://broadinstitute.github.io/picard/command-line-overview.html#CollectRnaSeqMetrics))
  * indexes for STAR and RSEM.
  
-
 
 ## Preparation
 

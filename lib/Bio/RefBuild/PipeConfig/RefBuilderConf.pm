@@ -175,7 +175,7 @@ sub pipeline_analyses {
             -module     => 'Bio::RefBuild::Process::RefBuilderPreFlightChecks',
             -rc_name    => 'default',
             -parameters => {
-                do_assembly   => 1,
+                do_assembly   => 0,
                 do_annotation => 0,
             },
             -flow_into => ['write_manifest'],
