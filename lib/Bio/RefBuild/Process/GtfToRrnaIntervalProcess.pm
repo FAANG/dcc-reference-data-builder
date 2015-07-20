@@ -7,7 +7,7 @@ use base ('Bio::EnsEMBL::Hive::Process');
 
 use autodie;
 use Bio::RefBuild::Util::GtfToRrnaInterval;
-use IO::Uncompress::AnyUncompress qw($AnyUncompressError);
+use PerlIO::gzip;
 
 sub fetch_input {
     my ($self) = @_;
@@ -24,8 +24,7 @@ sub run {
     my $gtf = $self->param_required('gtf');
 
     if ( $gtf =~ m/\.gz$/ ) {
-        $gtf_fh = IO::Uncompress::AnyUncompress->new($gtf)
-          or die "anyuncompress failed: $AnyUncompressError\n";
+        open( $gtf_fh, '<:gzip', $gtf );
     }
     else {
         open( $gtf_fh, '<', $gtf );

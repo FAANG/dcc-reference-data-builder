@@ -1,6 +1,8 @@
 package Bio::RefBuild::Util::SplitFasta;
 
 use Moose;
+use PerlIO::gzip;
+
 has 'output_dir'  => ( is => 'rw', isa => 'Str' );
 has 'fasta_in_fh' => ( is => 'rw', isa => 'FileHandle' );
 has 'gzip_output'    => ( is => 'rw', isa => 'Bool' );

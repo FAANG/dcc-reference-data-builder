@@ -5,49 +5,6 @@ use warnings;
 
 use base ('Bio::EnsEMBL::Hive::PipeConfig::HiveGeneric_conf');
 
-my %foo = {
-    "dir_annot_index_rsem" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/test1_gencode/rsem",
-    "dir_annot_index_rsem_polya" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/test1_gencode/rsem_polya",
-    "dir_annot_index_star" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/test1_gencode/star",
-    "dir_annotation" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/annotation",
-    "dir_annotation_base" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/test1_gencode",
-    "dir_base" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1",
-    "dir_genome_fasta" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/genome_fasta",
-    "dir_index_bismark" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/genome_index/bismark",
-    "dir_index_bowtie1" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/genome_index/bowtie1",
-    "dir_index_bowtie2" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/genome_index/bowtie2",
-    "dir_index_bwa" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/genome_index/bwa",
-    "dir_mappability" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/mappability",
-    "dir_split_genome_fasta" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/genome_fasta/split_fasta",
-    "fai" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/genome_fasta/ta1.fa.gz.fai",
-    "fasta" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/genome_fasta/ta1.fa",
-    "gtf" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/test1_gencode/ta1_test1_gencode.gtf",
-    "gtf_gz" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/test1_gencode/ta1_test1_gencode.gtf.gz",
-    "manifest" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/files.manifest",
-    "ref_flat" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/test1_gencode/ta1_test1_gencode.ref_flat.gz",
-    "rrna_interval" =>
-"/nfs/production/reseq-info/work/davidr/ref_builder/ref_files/Homo_sapiens/ta1/test1_gencode/ta1_test1_gencode.rrna.interval"
-};
-
 sub pipeline_wide_parameters {
     my ($self) = @_;
     return {
@@ -178,10 +135,9 @@ sub pipeline_analyses {
                 do_assembly   => 0,
                 do_annotation => 0,
             },
-            -flow_into => ['write_manifest'],
-        },
 
-        #final job
+        },
+       #final job
         {
             -logic_name => 'write_manifest',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
@@ -196,11 +152,23 @@ sub pipeline_analyses {
         {
             -logic_name => 'process_fasta',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
+            -rc_name    => 'default',
             -parameters => {
                 cmd =>
 'gunzip -c #fasta_file# | tee #fasta# | #bgzip# -c > #bgzip_fasta#',
             },
-            -flow_into => [ 'support_files', 'assembly_indexing', ],
+            -flow_into =>
+              [ 'support_files', 'assembly_indexing', 'split_fasta' ],
+        },
+        {
+            -logic_name => 'split_fasta',
+            -module     => 'Bio::RefBuild::Process::SplitFastaProcess',
+            -rc_name    => '1Gb_job',
+            -parameters => {
+                fasta_file => '#bgzip_fasta#',
+                output_dir => '#dir_split_genome_fasta#',
+                do_gzip    => '1',
+            },
         },
         {
             -logic_name  => 'support_files',
@@ -236,7 +204,7 @@ sub pipeline_analyses {
             -rc_name    => '1Gb_job',
             -parameters => {
                 cmd =>
-'rm -f #dict# ; #java# -jar #picard# CreateSequenceDictionary REFERENCE=#bgzip_fasta# OUTPUT=#dict# GENOME_ASSEMBLY="#assembly_name#" SPECIES="#species_name#" URI="#fasta_uri#"',
+'rm -f #dict# ; #java# -jar #picard# CreateSequenceDictionary REFERENCE=#bgzip_fasta# OUTPUT=#dict# GENOME_ASSEMBLY="#assembly_name#" SPECIES="#species_name#" URI="#fasta_uri#" TMP_DIR=#dir_base#',
             },
         },
         {
@@ -373,6 +341,7 @@ sub resource_classes {
     return {
         %{ $self->SUPER::resource_classes }
         ,    # inherit 'default' from the parent class
+             # LSF memory unit is Mb here
 
         'default' => { 'LSF' => '-M50   -R"select[mem>50]   rusage[mem=50]"' },
         '200Mb_job' =>
