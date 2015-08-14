@@ -17,7 +17,8 @@ The data is organised in a directory structure like this
           * _program name_
 
 For assemblies, the pipeline requires a fasta file. The pipeline provides
- * a bgzipped copy of the fasta file, with fai file (for use with [samtools faidx](http://www.htslib.org/doc/samtools.html))
+ * a gzipped copy of the fasta file
+ * a fai file (for use with [samtools faidx](http://www.htslib.org/doc/samtools.html))
  * a dict file for the fasta (from [picard](http://broadinstitute.github.io/picard/command-line-overview.html#CreateSequenceDictionary))
  * a list of chromosomes and their sizes (for use with various tools, e.g. bedToBigBed)
  * indexes for bwa, bowtie, bowtie2 and bismark
@@ -45,7 +46,7 @@ The pipeline requires several external programs. The version used in development
  * java ([1.6.0_24](https://java.com/en/download/))
  * picard( ([1.135](http://broadinstitute.github.io/picard/))
  * rsem ([1.2.21](http://deweylab.biostat.wisc.edu/rsem/))
- * samtools ([1.2](http://www.htslib.org/download/))
+ * samtools ([1.2](http://www.htslib.org/download/)) (including the script misc/seq\_cache\_populate.pl) 
  * star ([2.4.2a](https://github.com/alexdobin/STAR/releases/tag/STAR_2.4.2a))
 
 In addition, the pipeline expects to run under linux and makes use of standard linux tools:
@@ -79,15 +80,25 @@ Use hive's init pipeline to create a pipeline database:
       -gtfToGenePred /path/to/gtfToGenePred \
       -rsem_dir /path/to/rsem \
       -bismark_dir /path/to/bismark \
+      -bedGraphToBigWig /path/to/bedGraphToBigWig \
+      -wiggletools /path/to/wiggletools \
+      -cram_seq_cache_populate_script /path/to/seq\_cache\_populate.pl \
+      -lsf_queue_name a_queue_name \
+      -cram_cache_root /path/to/cram/cache/root
       -output_root /path/to/output_dir
+      
+You may also specfiy `-lsf_std_param` to add additional LSF parameters for all jobs. For example, we use  `-lsf_std_param '-R"select[lustre]"'` to ensure that all nodes can see the required storage area. The CRAM reference cache is explained on the [HTSlib](http://www.htslib.org/workflow/#the-refpath-and-refcache) site. Set `cram_cache_root` to the  directory used in the `REF_CACHE` environment variable.
 
 The output of this will include the database URL required for later steps, e.g. `mysql://dbuser:dbpassword@dbhost:dbport/myuser_ref_builder`
 
 ## Workflow
 
+You can choose to run everything at once, or run each major step individually. The major steps are:
+
 1. Create assembly specific resources
 2. Create one or more annotation specific resources
-3. Create a manifest file describing the files
+3. Create mappability tracks for a range of kmer/read lengths
+4. Create a manifest file describing all files produced
 
 ### Assembly specific resources
 
@@ -120,4 +131,13 @@ It can be useful to have a manifest file, listing the size and a checksum value 
       "{assembly_name => 'galgal4', species_name => 'Gallus gallus',}"
     
       beekeeper.pl -url mysql://dbuser:dbpassword@dbhost:dbport/myuser_ref_builder -loop
-  
+
+### Run everything at once
+
+For ease of use, you can seed all steps in one go:
+
+    seed_pipeline.pl -url mysql://dbuser:dbpassword@dbhost:dbport/myuser_ref_builder \
+      -logic_name start_all -input_id \
+      "{assembly_name=>'Galgal4',fasta_uri=>'ftp://ftp.ensembl.org/pub/release-80/fasta/gallus_gallus/dna/Gallus_gallus.Galgal4.dna.toplevel.fa.gz',fasta_file=>'Gallus_gallus.Galgal4.dna.toplevel.fa.gz',species_name=>'Gallus gallus',kmer_sizes=>'50,100,150,200',annotation_name=>'e80',gtf_file=>'Gallus_gallus.Galgal4.80.gtf.gz'}"  
+    
+    beekeeper.pl -url mysql://dbuser:dbpassword@dbhost:dbport/myuser_ref_builder -loop

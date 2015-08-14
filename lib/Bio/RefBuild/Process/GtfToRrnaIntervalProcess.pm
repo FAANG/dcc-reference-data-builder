@@ -20,6 +20,8 @@ sub fetch_input {
 sub run {
     my ($self) = @_;
 
+    $self->dbc and $self->dbc->disconnect_when_inactive(1);    # release this connection for the duration of task
+
     my $gtf_fh;
     my $gtf = $self->param_required('gtf');
 
@@ -42,6 +44,7 @@ sub run {
     $converter->convert();
 
     map { close($_) } ( $gtf_fh, $dict_fh, $rrna_interval_fh );
+
 }
 
 1;

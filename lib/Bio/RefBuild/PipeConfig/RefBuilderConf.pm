@@ -14,18 +14,23 @@ sub pipeline_wide_parameters {
         samtools                  => $self->o('samtools'),
         bowtie1_dir               => $self->o('bowtie1_dir'),
         bowtie2_dir               => $self->o('bowtie2_dir'),
+        bedGraphToBigWig          => $self->o('bedGraphToBigWig'),
         rsem_dir                  => $self->o('rsem_dir'),
         picard                    => $self->o('picard'),
         java                      => $self->o('java'),
         bedtools                  => $self->o('bedtools'),
         bwa                       => $self->o('bwa'),
-        bgzip                     => $self->o('bgzip'),
         star                      => $self->o('star'),
         gtfToGenePred             => $self->o('gtfToGenePred'),
         bismark_dir               => $self->o('bismark_dir'),
         output_root               => $self->o('output_root'),
         assembly_index_programs   => $self->o('assembly_index_programs'),
         annotation_index_programs => $self->o('annotation_index_programs'),
+        wiggletools               => $self->o('wiggletools'),
+        cram_seq_cache_populate_script =>
+          $self->o('cram_seq_cache_populate_script'),
+        cram_cache_root        => $self->o('cram_cache_root'),
+        cram_cache_num_subdirs => $self->o('cram_cache_num_subdirs'),
     };
 }
 
@@ -36,6 +41,8 @@ sub default_options {
         assembly_index_programs   => [qw(bismark bwa bowtie1 bowtie2)],
         annotation_index_programs => [qw(rsem rsem_polya star)],
         pipeline_name             => 'ref_builder',
+        lsf_std_param             => '',
+        cram_cache_num_subdirs    => 2,
     };
 }
 
@@ -47,7 +54,6 @@ sub default_options {
     bedtools
     bwa
     java
-    bgzip
     gtfToGenePred
     bismark_dir
     bowtie1_dir
@@ -75,7 +81,6 @@ sub default_options {
     dir_annotation
     dir_genome_fasta
     dir_mappability
-    dir_split_genome_fasta
     dir_index_bismark
     dir_index_bowtie1
     dir_index_bowtie2
@@ -83,7 +88,6 @@ sub default_options {
 
     manifest
     assembly_base_name
-    bgzip_fasta
     fasta
     chrom_sizes
     dict
@@ -102,10 +106,22 @@ sub default_options {
 
 =cut
 
-sub pipeline_analyses {
+sub _pipeline_analyses_overall_control {
     my ($self) = @_;
-    return [
-        #entry points
+    return (
+        {
+            -logic_name => 'start_all',
+            -module     => 'Bio::RefBuild::Process::RefBuilderPreFlightChecks',
+            -rc_name    => 'default',
+            -parameters => {
+                do_assembly   => 1,
+                do_annotation => 1,
+            },
+            -flow_into => {
+                '1->A' => ['count_fasta_lines'],
+                'A->1' => ['post_assembly_steps'],
+            }
+        },
         {
             -logic_name => 'start_assembly',
             -module     => 'Bio::RefBuild::Process::RefBuilderPreFlightChecks',
@@ -114,7 +130,7 @@ sub pipeline_analyses {
                 do_assembly   => 1,
                 do_annotation => 0,
             },
-            -flow_into => ['process_fasta'],
+            -flow_into => ['count_fasta_lines'],
         },
         {
             -logic_name => 'start_annotation',
@@ -125,7 +141,17 @@ sub pipeline_analyses {
                 do_annotation => 1,
 
             },
-            -flow_into => [ 'cp_annotation', 'unzip_annotation' ],
+            -flow_into => ['count_annotation_lines'],
+        },
+        {
+            -logic_name => 'start_mappability',
+            -module     => 'Bio::RefBuild::Process::RefBuilderPreFlightChecks',
+            -rc_name    => 'default',
+            -parameters => {
+                do_assembly   => 0,
+                do_annotation => 0,
+            },
+            -flow_into => ['kmer_factory'],
         },
         {
             -logic_name => 'start_manifest',
@@ -135,77 +161,316 @@ sub pipeline_analyses {
                 do_assembly   => 0,
                 do_annotation => 0,
             },
-
-        },
-       #final job
-        {
-            -logic_name => 'write_manifest',
-            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => 'default',
-            -parameters => {
-                cmd =>
-'find #dir_base# -type f -printf \'%p\t%s\t\' -execdir sh -c \'md5sum "{}" | sed s/\ .*//\' \; > #manifest#',
-            },
-        },
-
-        #assembly processes
-        {
-            -logic_name => 'process_fasta',
-            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => 'default',
-            -parameters => {
-                cmd =>
-'gunzip -c #fasta_file# | tee #fasta# | #bgzip# -c > #bgzip_fasta#',
-            },
-            -flow_into =>
-              [ 'support_files', 'assembly_indexing', 'split_fasta' ],
+            -flow_into => ['write_manifest'],
         },
         {
-            -logic_name => 'split_fasta',
-            -module     => 'Bio::RefBuild::Process::SplitFastaProcess',
-            -rc_name    => '1Gb_job',
-            -parameters => {
-                fasta_file => '#bgzip_fasta#',
-                output_dir => '#dir_split_genome_fasta#',
-                do_gzip    => '1',
-            },
-        },
-        {
-            -logic_name  => 'support_files',
+            -logic_name  => 'post_assembly_steps',
             -module      => 'Bio::EnsEMBL::Hive::RunnableDB::Dummy',
             -meadow_type => 'LOCAL',
-            -flow_into   => [ 'samtools_fai', 'picard_dict' ],
+            -flow_into   => {
+                '1->A' => [ 'count_annotation_lines', 'kmer_factory' ],
+                'A->1' => ['write_manifest'],
+            }
+        },
+    );
+}
+
+sub _pipeline_analyses_mappability_tasks {
+    my ($self) = @_;
+    return (
+        {
+            -logic_name => 'kmer_factory',
+            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::JobFactory',
+            -parameters => {
+                inputlist       => '#expr( [eval(#kmer_sizes#)] )expr#',
+                fan_branch_code => 1,
+                column_names    => ['kmer_size'],
+            },
+            -flow_into => {
+                '1' => {
+                    'kmer_output_dir' => {
+                        kmer_size    => '#kmer_size#',
+                        kmer_out_dir => '#dir_mappability#/k#kmer_size#',
+                        name         => '#assembly_name#.k#kmer_size#',
+                    },
+                },
+            },
         },
         {
-            -logic_name  => 'assembly_indexing',
-            -module      => 'Bio::EnsEMBL::Hive::RunnableDB::Dummy',
-            -meadow_type => 'LOCAL',
-            -flow_into   => [
-                'bowtie1_index', 'bowtie2_index',
-                'bwa_index',     'pre_bismark_index',
+            -logic_name => 'kmer_output_dir',
+            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
+            -parameters => { cmd => 'mkdir -p #kmer_out_dir#', },
+            -rc_name    => 'default',
+            -flow_into  => {
+                '1->A' => ['mappa_fasta_allocation'],
+                'A->1' => {
+                    'bam_merge' => {
+                        bigwig   => '#kmer_out_dir#/#name#.bw',
+                        bedgraph => '#kmer_out_dir#/#name#.bg',
+                        bam      => '#kmer_out_dir#/#name#.bam',
+                    }
+                },
+            }
+        },
+        {
+            -logic_name => 'mappa_fasta_allocation',
+            -module     => 'Bio::GenomeSignalTracks::Process::DivideFastaByFai',
+            -parameters => {
+                fai               => '#fai#',
+                target_base_pairs => 20_000_000,
+                fan_branch_code   => 2,
+            },
+            -rc_name   => 'default',
+            -flow_into => {
+                '2' => {
+                    'fasta_kmers_factory' => {
+                        fasta_file       => '#fasta#',
+                        seq_start_pos    => '#seq_start_pos#',
+                        num_seqs_to_read => '#num_seqs_to_read#',
+                    }
+                },
+            }
+        },
+        {
+            -logic_name => 'fasta_kmers_factory',
+            -module => 'Bio::GenomeSignalTracks::Process::FastaKmerSplitter',
+            -parameters => {
+                gzip        => 1,
+                split_limit => 250_000_000,
+                output_dir  => '#kmer_out_dir#',
+            },
+            -rc_name   => '2Gb_job',
+            -flow_into => {
+                2 => {
+                    'mappa_bowtie' =>
+                      { bam => '#kmer_file#.bam', kmer_file => '#kmer_file#' }
+                }
+            },
+            -analysis_capacity => 100
+        },
+        {
+            -logic_name => 'mappa_bowtie',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                cmd =>
+'gunzip -c #kmer_file# | #bowtie1_dir#/bowtie -v 0 -k 1 -m 1 -r -S #dir_index_bowtie1#/#assembly_base_name# - | #samtools# view -SbF4 - > #bam#',
+                expected_file => '#bam#'
+            },
+            -rc_name   => '2Gb_job',
+            -flow_into => {
+                1 => {
+                    'mappa_sort_bam' => { 'bam'  => '#bam#' },
+                    'rm_file'        => { 'file' => '#kmer_file#' }
+                }
+            },
+            -analysis_capacity => 100
+        },
+        {
+            -logic_name => 'mappa_sort_bam',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                sorted_bam => '#bam#.sorted.bam',
+                cmd =>
+                  '#samtools# sort -O bam -o #sorted_bam# -T #bam#.tmp #bam#',
+                expected_file => '#sorted_bam#',
+            },
+            -rc_name   => '2Gb_job',
+            -flow_into => {
+                1 => {
+                    ':////accu?sorted_bam=[]' => {},
+                    'rm_file'                 => { file => '#bam#' }
+                }
+            },
+            -analysis_capacity => 100
+        },
+        {
+            -logic_name        => 'rm_file',
+            -module            => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
+            -parameters        => { cmd => 'rm -f #file#', },
+            -analysis_capacity => 1,
+        },
+
+        {
+            -logic_name => 'bam_merge',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -rc_name    => '2Gb_job',
+            -parameters => {
+                cmd =>
+'#samtools# merge -f #bam# #expr(join(" ",@{#sorted_bam#}))expr#',
+                expected_file => '#bam#',
+            },
+            -flow_into => {
+                1 => {
+                    'bam2bg' => { bam => '#bam#', },
+                    'rm_file' =>
+                      { 'file' => '#expr(join(" ",@{#sorted_bam#}))expr#' }
+                }
+            }
+        },
+        {
+            -logic_name => 'bam2bg',
+            -rc_name    => '3Gb_job',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                scaling_factor => '#expr( 1/#kmer_size# )expr#',
+                cmd =>
+'#bedtools# genomecov -ibam #bam# -bg -scale #scaling_factor# > #bedgraph#',
+                expected_file => '#bedgraph#',
+            },
+            -flow_into => {
+                1 => {
+                    'rm_file'          => { file     => '#bam#' },
+                    'bedGraphToBigWig' => { bedgraph => '#bedgraph#', }
+                }
+            }
+        },
+        {
+            -logic_name => 'bedGraphToBigWig',
+            -rc_name    => '2Gb_job',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                cmd => '#bedGraphToBigWig# #bedgraph# #chrom_sizes# #bigwig# ',
+                expected_file => '#bigwig#',
+            },
+            -flow_into => {
+                1 => {
+                    rm_file               => { file   => '#bedgraph#' },
+                    mappa_auc             => { bigwig => '#bigwig#' },
+                    mappa_low_mappability => { bigwig => '#bigwig#' },
+                    mappa_histogram       => { bigwig => '#bigwig#' },
+                },
+
+            }
+        },
+        {
+            -logic_name => 'mappa_auc',
+            -rc_name    => 'default',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                auc           => '#kmer_out_dir#/#name#.auc',
+                cmd           => '#wiggletools# AUC #bigwig# > #auc#',
+                expected_file => '#auc#',
+            },
+        },
+        {
+            -logic_name => 'mappa_low_mappability',
+            -rc_name    => 'default',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                low_mappability_threshold => 0.25,
+                lm =>
+'#kmer_out_dir#/#name#.low_mappability.lt#low_mappability_threshold#.bed',
+                cmd =>
+'#wiggletools# write_bg - lt #low_mappability_threshold# #bigwig# | cut -f1-3 > #lm#',
+                expected_file => '#lm#',
+            },
+        },
+        {
+            -logic_name => 'mappa_histogram',
+            -rc_name    => 'default',
+            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
+            -parameters => {
+                num_of_hist_bins => 10,
+                histogram        => '#kmer_out_dir#/#name#.histogram',
+                cmd =>
+'echo "mappability	#name#" > #histogram# ; #wiggletools# histogram - #num_of_hist_bins# default 0 #bigwig# >> #histogram#',
+                expected_file           => '#histogram#',
+                expected_file_num_lines => 11,
+            },
+        },
+    );
+}
+
+sub _pipeline_analyses_assembly {
+    my ($self) = @_;
+    return (
+        {
+            -logic_name => 'count_fasta_lines',
+            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::JobFactory',
+            -parameters => {
+                inputcmd        => 'gunzip -c #fasta_file#  | wc -l',
+                fan_branch_code => 1,
+                column_names    => ['fasta_line_count'],
+            },
+            -flow_into => ['count_fasta_seq'],
+        },
+        {
+            -logic_name => 'count_fasta_seq',
+            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::JobFactory',
+            -parameters => {
+                inputcmd        => 'gunzip -c #fasta_file#  | grep \> | wc -l',
+                fan_branch_code => 1,
+                column_names    => ['fasta_seq_count'],
+            },
+            -flow_into => ['unzip_fasta'],
+        },
+        {
+            -logic_name => 'unzip_fasta',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -rc_name    => 'default',
+            -parameters => {
+                cmd                     => 'gunzip -c #fasta_file# > #fasta#',
+                expected_file           => '#fasta#',
+                expected_file_num_lines => '#fasta_line_count#',
+            },
+            -flow_into => [
+                'picard_dict',       'samtools_fai',
+                'bowtie1_index',     'bowtie2_index',
+                'pre_bismark_index', 'populate_cram_cache',
+                'bwa_index'
             ],
         },
         {
-            -logic_name => 'samtools_fai',
-            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => 'default',
-            -parameters => { cmd => '#samtools# faidx #bgzip_fasta#', },
-            -flow_into  => ['chrom_sizes'],
-        },
-        {
-            -logic_name => 'chrom_sizes',
-            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => 'default',
-            -parameters => { cmd => 'cut -f1,2 #fai# > #chrom_sizes#', },
-        },
-        {
-            -logic_name => 'picard_dict',
+            -logic_name => 'populate_cram_cache',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
             -rc_name    => '1Gb_job',
             -parameters => {
                 cmd =>
-'rm -f #dict# ; #java# -jar #picard# CreateSequenceDictionary REFERENCE=#bgzip_fasta# OUTPUT=#dict# GENOME_ASSEMBLY="#assembly_name#" SPECIES="#species_name#" URI="#fasta_uri#" TMP_DIR=#dir_base#',
+'#cram_seq_cache_populate_script# -root #cram_cache_root# -subdirs #cram_cache_num_subdirs# #fasta#'
             },
+        },
+        {
+            -logic_name => 'gzip_file',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                cmd           => 'gzip #file#',
+                expected_file => '#file#.gz',
+            },
+            -analysis_capacity => 50,
+        },
+
+        {
+            -logic_name => 'samtools_fai',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -rc_name    => 'default',
+            -parameters => {
+                cmd                     => '#samtools# faidx #fasta#',
+                expected_file           => '#fai#',
+                expected_file_num_lines => '#fasta_seq_count#',
+            },
+            -flow_into => [ 'chrom_sizes', ],
+        },
+        {
+            -logic_name => 'chrom_sizes',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -rc_name    => 'default',
+            -parameters => {
+                cmd                     => 'cut -f1,2 #fai# > #chrom_sizes#',
+                expected_file           => '#chrom_sizes#',
+                expected_file_num_lines => '#fasta_seq_count#',
+            },
+        },
+        {
+            -logic_name => 'picard_dict',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -rc_name    => '4Gb_job',
+            -parameters => {
+                cmd =>
+'touch #dict#; rm #dict# ; #java# -Xmx4G -jar #picard# CreateSequenceDictionary REFERENCE=#fasta# OUTPUT=#dict# GENOME_ASSEMBLY="#assembly_name#" SPECIES="#species_name#" URI="#fasta_uri#" TMP_DIR=#dir_base#',
+                expected_file           => '#dict#',
+                expected_file_num_lines => '#expr(#fasta_seq_count#+1)expr#'
+            },
+
         },
         {
             -logic_name => 'bwa_index',
@@ -213,7 +478,7 @@ sub pipeline_analyses {
             -rc_name    => '5Gb_job',
             -parameters => {
                 cmd =>
-'#bwa# index -p #dir_index_bwa#/#assembly_base_name# #bgzip_fasta#',
+                  '#bwa# index -p #dir_index_bwa#/#assembly_base_name# #fasta#',
             },
         },
         {
@@ -241,12 +506,12 @@ sub pipeline_analyses {
             -parameters => {
                 cmd => 'cp #fasta# #dir_index_bismark#/#assembly_base_name#.fa',
             },
-            -flow_into => ['bismark_index'],
+            -flow_into => ['bismark_index']
         },
         {
             -logic_name => 'bismark_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => '6Gb_job',
+            -rc_name    => '10Gb_job',
             -parameters => {
                 cmd =>
 '#bismark_dir#/bismark_genome_preparation --path_to_bowtie #bowtie1_dir# --yes_to_all #dir_index_bismark#',
@@ -259,41 +524,49 @@ sub pipeline_analyses {
             -rc_name    => 'default',
             -parameters =>
               { cmd => 'rm -f #dir_index_bismark#/#assembly_base_name#.fa', },
-        },
 
-        #annotation processes
+        },
+    );
+}
+
+sub _pipeline_analyses_annotation {
+    my ($self) = @_;
+    return (
+        {
+            -logic_name => 'count_annotation_lines',
+            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::JobFactory',
+            -parameters => {
+                inputcmd        => 'gunzip -c #gtf_file# | wc -l',
+                fan_branch_code => 1,
+                column_names    => ['annotation_line_count'],
+            },
+            -flow_into => [ 'cp_annotation', 'unzip_annotation' ],
+        },
         {
             -logic_name => 'cp_annotation',
-            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
             -rc_name    => 'default',
-            -parameters => { cmd => 'cp #gtf_file# #gtf_gz#', },
-            -flow_into  => ['ref_flat'],
+            -parameters => {
+                cmd                     => 'cp #gtf_file# #gtf_gz#',
+                expected_file           => '#gtf_gz#',
+                expected_file_num_lines => '#annotation_line_count#'
+            },
+            -flow_into => [ 'ref_flat', ],
         },
         {
             -logic_name => 'unzip_annotation',
-            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
             -rc_name    => 'default',
-            -parameters => { cmd => 'gunzip -c #gtf_file# > #gtf#', },
-            -flow_into  => [ 'annotation_indexing', 'rrna_interval' ],
-        },
-        {
-            -logic_name => 'ref_flat',
-
-# adapted fromhttps://gist.github.com/igordot/4467f1b02234ff864e61 ref flat from gtf
-            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => '400Mb_job',
             -parameters => {
-                cmd =>
-'#gtfToGenePred# -genePredExt -geneNameAsName2 #gtf# /dev/stdout | awk \'BEGIN{OFS="\t";FS="\t"}{print $12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10}\' | gzip -c > #ref_flat#',
+                cmd                     => 'gunzip -c #gtf_file# > #gtf#',
+                expected_file           => '#gtf#',
+                expected_file_num_lines => '#annotation_line_count#'
             },
+            -flow_into => [
+                'rrna_interval',    'rsem_index',
+                'rsem_polya_index', 'star_index'
+            ],
         },
-        {
-            -logic_name  => 'annotation_indexing',
-            -module      => 'Bio::EnsEMBL::Hive::RunnableDB::Dummy',
-            -meadow_type => 'LOCAL',
-            -flow_into   => [ 'rsem_index', 'rsem_polya_index', 'star_index', ],
-        },
-
         {
             -logic_name => 'rrna_interval',
             -module     => 'Bio::RefBuild::Process::GtfToRrnaIntervalProcess',
@@ -304,14 +577,15 @@ sub pipeline_analyses {
                 rrna_interval => '#rrna_interval#'
             },
         },
-
         {
-            -logic_name => 'star_index',
+            -logic_name => 'ref_flat',
+
+# adapted fromhttps://gist.github.com/igordot/4467f1b02234ff864e61 ref flat from gtf
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => 'star_job',
+            -rc_name    => '400Mb_job',
             -parameters => {
                 cmd =>
-'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_annot_index_star# --genomeFastaFiles #fasta# --sjdbGTFfile #gtf#',
+'#gtfToGenePred# -genePredExt -geneNameAsName2 #gtf# /dev/stdout | awk \'BEGIN{OFS="\t";FS="\t"}{print $12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10}\' | gzip -c > #ref_flat#',
             },
         },
         {
@@ -332,37 +606,83 @@ sub pipeline_analyses {
 '#rsem_dir#/rsem-prepare-reference -q --polyA --gtf #gtf# --bowtie --bowtie-path #bowtie1_dir# --bowtie2 --bowtie2-path #bowtie2_dir# #fasta# #dir_annot_index_rsem_polya#/#annotation_base_name#_polya'
             },
         },
+        {
+            -logic_name => 'star_index',
+            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
+            -rc_name    => 'star_job',
+            -parameters => {
+                cmd =>
+'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_annot_index_star# --genomeFastaFiles #fasta# --sjdbGTFfile #gtf#',
+            },
+        },
+    );
+}
 
+sub _pipeline_analyses_manifest {
+    my ($self) = @_;
+    return (
+        {
+            -logic_name => 'write_manifest',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -rc_name    => 'default',
+            -parameters => {
+                cmd =>
+'find #dir_base# -type f -printf \'%p\t%s\t\' -execdir sh -c \'md5sum "{}" | sed s/\ .*//\' \; > #manifest#',
+                expected_file => '#manifest#'
+            },
+        },
+    );
+}
+
+sub pipeline_analyses {
+    my ($self) = @_;
+    return [
+        $self->_pipeline_analyses_overall_control(),
+        $self->_pipeline_analyses_assembly(),
+        $self->_pipeline_analyses_mappability_tasks(),
+        $self->_pipeline_analyses_annotation(),
+        $self->_pipeline_analyses_manifest(),
     ];
 }
 
 sub resource_classes {
     my ($self) = @_;
-    return {
-        %{ $self->SUPER::resource_classes }
-        ,    # inherit 'default' from the parent class
-             # LSF memory unit is Mb here
 
-        'default' => { 'LSF' => '-M50   -R"select[mem>50]   rusage[mem=50]"' },
-        '200Mb_job' =>
-          { 'LSF' => '-M200   -R"select[mem>200]   rusage[mem=200]"' },
-        '400Mb_job' =>
-          { 'LSF' => '-M400   -R"select[mem>400]   rusage[mem=400]"' },
-        '1Gb_job' =>
-          { 'LSF' => '-M1000  -R"select[mem>1000]  rusage[mem=1000]"' },
-        '2Gb_job' =>
-          { 'LSF' => '-M2000  -R"select[mem>2000]  rusage[mem=2000]"' },
-        '3Gb_job' =>
-          { 'LSF' => '-M3000  -R"select[mem>3000]  rusage[mem=3000]"' },
-        '5Gb_job' =>
-          { 'LSF' => '-M5000  -R"select[mem>5000]  rusage[mem=5000]"' },
-        '6Gb_job' =>
-          { 'LSF' => '-M6000  -R"select[mem>6000]  rusage[mem=6000]"' },
+    my $lsf_queue_name = $self->o('lsf_queue_name');
+    my $lsf_std_param  = $self->o('lsf_std_param');
+
+    my $gb          = 1024;
+    my %name_to_mem = (
+        'default'   => 100,
+        '200Mb_job' => 200,
+        '400Mb_job' => 400,
+        '1Gb_job'   => $gb,
+        '2Gb_job'   => 2 * $gb,
+        '3Gb_job'   => 3 * $gb,
+        '4Gb_job'   => 4 * $gb,
+        '5Gb_job'   => 5 * $gb,
+        '6Gb_job'   => 6 * $gb,
+        '7Gb_job'   => 7 * $gb,
+        '10Gb_job'  => 10 * $gb,
+    );
+
+    my %resources = (
         'star_job' => {
             'LSF' =>
-'-M31000 -n4 -R"span[hosts=1]  select[mem>31000] rusage[mem=31000]"'
+"-M35000 -q $lsf_queue_name -n4 -R\"span[hosts=1]  select[mem>35000] rusage[mem=35000]\" $lsf_std_param",
         },
-    };
+    );
+
+    for my $n ( sort keys %name_to_mem ) {
+        my $m = $name_to_mem{$n};
+        $resources{$n} = {
+            LSF =>
+"-M$m -q $lsf_queue_name -R\"span[hosts=1]  select[mem>$m] rusage[mem=$m]\" $lsf_std_param",
+
+        };
+    }
+
+    return \%resources;
 }
 
 sub hive_meta_table {

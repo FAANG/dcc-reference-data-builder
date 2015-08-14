@@ -10,14 +10,16 @@ sub check_exes {
 
     # do the executables exist, and are they actually executable?
     my %executables = (
-        samtools      => $self->param_required('samtools'),
-        star          => $self->param_required('star'),
-        bedtools      => $self->param_required('bedtools'),
-        bwa           => $self->param_required('bwa'),
-        java          => $self->param_required('java'),
-        bgzip         => $self->param_required('bgzip'),
-        gtfToGenePred => $self->param_required('gtfToGenePred'),
-
+        samtools         => $self->param_required('samtools'),
+        star             => $self->param_required('star'),
+        bedtools         => $self->param_required('bedtools'),
+        bwa              => $self->param_required('bwa'),
+        java             => $self->param_required('java'),
+        gtfToGenePred    => $self->param_required('gtfToGenePred'),
+        bedGraphToBigWig => $self->param_required('bedGraphToBigWig'),
+        wiggletools      => $self->param_required('wiggletools'),
+        cram_seq_cache_populate_script =>
+          $self->param_required('cram_seq_cache_populate_script'),
     );
     for my $executable ( values %executables ) {
         if ( !-x $executable ) {
@@ -35,6 +37,7 @@ sub check_dirs {
         bowtie2_dir     => $self->param_required('bowtie2_dir'),
         rsem_dir        => $self->param_required('rsem_dir'),
         root_output_dir => $self->param_required('output_root'),
+        cram_cache_root => $self->param_required('cram_cache_root'),
     );
     for my $dir ( values %dirs ) {
         if ( !-d $dir ) {
@@ -93,7 +96,8 @@ sub fetch_annotation_requirements {
     my $as                  = $self->param("assembly_filename_base");
 
     my $an = $self->sanitize_file_name($annotation);
-    $self->param( "annotation_output_dir",    "$assembly_output_dir/annotation/$an" );
+    $self->param( "annotation_output_dir",
+        "$assembly_output_dir/annotation/$an" );
     $self->param( "annotation_filename_base", $as . '_' . $an );
 
     my $gtf_file = $self->param_required('gtf_file');
@@ -139,8 +143,6 @@ sub run {
         my $target = "$assembly_output_dir/$dir";
         $dirs_created{"dir_$dir"} = $target;
     }
-    $dirs_created{"dir_split_genome_fasta"} =
-      $dirs_created{"dir_genome_fasta"} . '/split_fasta';
 
     for my $index_prog (@$as_index_programs) {
         my $target = "$assembly_output_dir/genome_index/$index_prog";
@@ -185,8 +187,7 @@ sub write_output {
 
     my %params_out = (
         assembly_base_name => $assembly,
-        bgzip_fasta        => "$fasta_root/$assembly.fa.gz",
-        fai                => "$fasta_root/$assembly.fa.gz.fai",
+        fai                => "$fasta_root/$assembly.fa.fai",
         dict               => "$fasta_root/$assembly.dict",
         chrom_sizes        => "$fasta_root/$assembly.sizes",
         fasta              => "$fasta_root/$assembly.fa",
