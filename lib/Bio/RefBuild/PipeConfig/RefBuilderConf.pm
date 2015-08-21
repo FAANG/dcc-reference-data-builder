@@ -180,6 +180,7 @@ sub _pipeline_analyses_mappability_tasks {
     return (
         {
             -logic_name => 'kmer_factory',
+            -rc_name    => 'default',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::JobFactory',
             -parameters => {
                 inputlist       => '#expr( [eval(#kmer_sizes#)] )expr#',
@@ -227,6 +228,8 @@ sub _pipeline_analyses_mappability_tasks {
                         fasta_file       => '#fasta#',
                         seq_start_pos    => '#seq_start_pos#',
                         num_seqs_to_read => '#num_seqs_to_read#',
+                        first_seq_name   => '#first_seq_name#',
+                        kmer_size        => '#kmer_size#',
                     }
                 },
             }
@@ -246,24 +249,23 @@ sub _pipeline_analyses_mappability_tasks {
                       { bam => '#kmer_file#.bam', kmer_file => '#kmer_file#' }
                 }
             },
-            -analysis_capacity => 100
         },
         {
             -logic_name => 'mappa_bowtie',
             -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
             -parameters => {
                 cmd =>
-'gunzip -c #kmer_file# | #bowtie1_dir#/bowtie -v 0 -k 1 -m 1 -r -S #dir_index_bowtie1#/#assembly_base_name# - | #samtools# view -SbF4 - > #bam#',
+'gunzip -c #kmer_file# | #bowtie1_dir#/bowtie -v 0 -k 1 -m 1 -f -S #dir_index_bowtie1#/#assembly_base_name# - | #samtools# view -SbF4 - > #bam#',
                 expected_file => '#bam#'
             },
             -rc_name   => '2Gb_job',
             -flow_into => {
                 1 => {
                     'mappa_sort_bam' => { 'bam'  => '#bam#' },
-                    'rm_file'        => { 'file' => '#kmer_file#' }
+                    'rm_file'        => { 'file' => '#kmer_file#' },
+
                 }
             },
-            -analysis_capacity => 100
         },
         {
             -logic_name => 'mappa_sort_bam',
@@ -278,10 +280,9 @@ sub _pipeline_analyses_mappability_tasks {
             -flow_into => {
                 1 => {
                     ':////accu?sorted_bam=[]' => {},
-                    'rm_file'                 => { file => '#bam#' }
+                    'rm_file' => { file => '#bam#' },
                 }
             },
-            -analysis_capacity => 100
         },
         {
             -logic_name        => 'rm_file',
@@ -301,14 +302,14 @@ sub _pipeline_analyses_mappability_tasks {
             },
             -flow_into => {
                 1 => {
-                    'bam2bg' => { bam => '#bam#', },
+                    'genome_cov_bg' => { bam => '#bam#', },
                     'rm_file' =>
                       { 'file' => '#expr(join(" ",@{#sorted_bam#}))expr#' }
                 }
             }
         },
         {
-            -logic_name => 'bam2bg',
+            -logic_name => 'genome_cov_bg',
             -rc_name    => '3Gb_job',
             -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
             -parameters => {
@@ -320,7 +321,8 @@ sub _pipeline_analyses_mappability_tasks {
             -flow_into => {
                 1 => {
                     'rm_file'          => { file     => '#bam#' },
-                    'bedGraphToBigWig' => { bedgraph => '#bedgraph#', }
+                    'bedGraphToBigWig' => { bedgraph => '#bedgraph#', },
+
                 }
             }
         },
@@ -334,6 +336,7 @@ sub _pipeline_analyses_mappability_tasks {
             },
             -flow_into => {
                 1 => {
+
                     rm_file               => { file   => '#bedgraph#' },
                     mappa_auc             => { bigwig => '#bigwig#' },
                     mappa_low_mappability => { bigwig => '#bigwig#' },
@@ -428,17 +431,7 @@ sub _pipeline_analyses_assembly {
                 cmd =>
 '#cram_seq_cache_populate_script# -root #cram_cache_root# -subdirs #cram_cache_num_subdirs# #fasta#'
             },
-        },
-        {
-            -logic_name => 'gzip_file',
-            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
-            -parameters => {
-                cmd           => 'gzip #file#',
-                expected_file => '#file#.gz',
-            },
-            -analysis_capacity => 50,
-        },
-
+        },        
         {
             -logic_name => 'samtools_fai',
             -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
