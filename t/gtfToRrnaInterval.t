@@ -6,7 +6,6 @@ use File::Temp qw/ tempdir /;
 use lib "$Bin/../lib";
 
 use Bio::RefBuild::Util::GtfToRrnaInterval;
-use IO::Uncompress::AnyUncompress qw($AnyUncompressError);
 use autodie;
 
 my $test_data_dir = "$Bin/data";
@@ -20,9 +19,7 @@ sub test1 {
     my $dict_fn     = "$test_data_dir/expected/ta1/support/ta1.fa.dict";
     my $gtf_fn      = "$test_data_dir/gencode.v22.grch38.cutdown.gtf.gz";
 
-    my $in_fh = IO::Uncompress::AnyUncompress->new($gtf_fn)
-      or die "anyuncompress failed: $AnyUncompressError\n";
-
+    open(my $in_fh,'-|', 'gzip', '-dc', $gtf_fn);
     open( my $dict_fh, '<', $dict_fn );
     open( my $out_fh,  '>', $test_out_fn );
 

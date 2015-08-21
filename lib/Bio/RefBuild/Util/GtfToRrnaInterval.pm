@@ -2,6 +2,7 @@ package Bio::RefBuild::Util::GtfToRrnaInterval;
 
 use strict;
 use Moose;
+use Bio::EnsEMBL::IO::Parser::GTF;
 
 has 'in_fh'   => ( is => 'rw', isa => 'FileHandle' );
 has 'out_fh'  => ( is => 'rw', isa => 'FileHandle' );
@@ -15,21 +16,31 @@ sub convert {
     my $out_fh  = $self->out_fh();
     my $dict_fh = $self->dict_fh();
 
+    my $parser = Bio::EnsEMBL::IO::Parser::GTF->open($in_fh);
+
     while (<$dict_fh>) {
         print $out_fh $_;
     }
 
-    while (<$in_fh>) {
-        chomp;
-        my @gtf = split /\t/;
-        if (   $gtf[2]
-            && $gtf[2] eq 'transcript'
-            && $gtf[8]
-            && $gtf[8] =~ m/gene_(bio)?type "rRNA"/ )
+    while ( $parser->next() ) {
+        my $attributes    = $parser->get_attributes;
+        my $transcript_id = $attributes->{transcript_id};
+        my $gene_type =
+             $attributes->{gene_type}
+          || $attributes->{gene_biotype}
+          || '';
+
+        if (
+               $parser->get_type() eq 'transcript'
+            && $transcript_id
+            && $gene_type eq 'rRNA'
+          )
         {
-            if ( $gtf[8] =~ /transcript_id "([^"]+)"/ ) {
-                print $out_fh join( "\t", @gtf[ 0, 3, 4, 6 ], $1 ) . $/;
-            }
+            print $out_fh join( "\t",
+                $parser->get_raw_seqname(), $parser->get_start(),
+                $parser->get_end(),     $parser->get_raw_strand(),
+                $transcript_id )
+              . $/;
         }
     }
 }
