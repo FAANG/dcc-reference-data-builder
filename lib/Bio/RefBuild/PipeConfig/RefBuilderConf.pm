@@ -342,7 +342,7 @@ sub _pipeline_analyses_mappability_tasks {
             -flow_into => {
                 1 => {
 
-                    'rm_file'             => { file => '#bam#' },
+                    'rm_file'         => { file => '#bam#' },
                     'mappable_pos_bb' => {},
 
                 }
@@ -357,11 +357,8 @@ sub _pipeline_analyses_mappability_tasks {
 '#bedGraphToBigWig# #mappable_pos_bedgraph# #chrom_sizes# #mappable_pos_bigwig#',
                 expected_file => '#mappable_pos_bigwig#',
             },
-            -flow_into => {
-                1 => {
-                    'rm_file' => { file => '#mappable_pos_bedgraph#' },
-                }
-            }
+            -flow_into =>
+              { 1 => { 'rm_file' => { file => '#mappable_pos_bedgraph#' }, } }
         },
         {
             -logic_name => 'bedGraphToBigWig',
@@ -593,19 +590,29 @@ sub _pipeline_analyses_annotation {
                 expected_file_num_lines => '#annotation_line_count#'
             },
             -flow_into => [
-                'rrna_interval',    'rsem_index',
-                'rsem_polya_index', 'star_index'
+                'gtf_to_beds', 'rrna_interval',
+                'rsem_index',  'rsem_polya_index',
+                'star_index'
             ],
         },
         {
-            -logic_name => 'rrna_interval',
-            -module     => 'Bio::RefBuild::Process::GtfToRrnaIntervalProcess',
+            -logic_name => 'gtf_to_beds',
+            -module     => 'Bio::RefBuild::Process::GtfToBedsProcess',
             -rc_name    => '200Mb_job',
             -parameters => {
+                gtf                  => '#gtf#',
+                dir_annotation_base  => '#dir_annotation_base#',
+                annotation_base_name => '#annotation_base_name#',
+            },
+        }{
+            -logic_name   => 'rrna_interval',
+              -module     => 'Bio::RefBuild::Process::GtfToRrnaIntervalProcess',
+              -rc_name    => '200Mb_job',
+              -parameters => {
                 gtf           => '#gtf',
                 dict          => '#dict#',
                 rrna_interval => '#rrna_interval#'
-            },
+              },
         },
         {
             -logic_name => 'ref_flat',
@@ -694,7 +701,7 @@ sub resource_classes {
         '6Gb_job'   => 6 * $gb,
         '7Gb_job'   => 7 * $gb,
         '10Gb_job'  => 10 * $gb,
-        '15Gb_job'  => 10 * $gb,
+        '15Gb_job'  => 15 * $gb,
     );
 
     my %resources = (
