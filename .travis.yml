@@ -4,6 +4,8 @@ perl:
   - "5.16"
   - "5.10"
 before_install:
+    - "cpanm git@github.com:Ensembl/ensembl-hive.git"
+    - "cpanm git@github.com:Ensembl/ensembl-io.git"
     - "cpanm -n Devel::Cover::Report::Coveralls"
     - "cpanm Module::Build::Pluggable Module::Build::Pluggable::CPANfile"
 before_script:
