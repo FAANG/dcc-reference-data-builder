@@ -4,8 +4,8 @@ perl:
   - "5.16"
   - "5.10"
 before_install:
-    - "git clone git@github.com:Ensembl/ensembl-hive.git ~/ensembl-hive"
-    - "git clone git@github.com:Ensembl/ensembl-io.git ~/ensembl-io"
+    - "git clone https://github.com/Ensembl/ensembl-hive.git ~/ensembl-hive"
+    - "git clone https://github.com/Ensembl/ensembl-io.git ~/ensembl-io"
     - "PERL5LIB=${PERL5LIB}:~/ensembl-hive/modules:~/ensembl-io/modules"
     - "cpanm -n Devel::Cover::Report::Coveralls"
     - "cpanm Module::Build::Pluggable Module::Build::Pluggable::CPANfile"
