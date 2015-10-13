@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use File::Path qw(make_path);
 use base ('Bio::EnsEMBL::Hive::Process');
+use Bio::RefBuild::Location qw(assembly_location);
 
 sub check_exes {
     my ($self) = @_;
@@ -53,25 +54,27 @@ sub fetch_core_requirements {
     $self->check_dirs();
     $self->param_required('picard');
 
-    my $species       = $self->param_required('species_name');
-    my $assembly_name = $self->param_required('assembly_name');
-
-    my $as = $self->sanitize_file_name($assembly_name);
-    my $sp = $self->sanitize_file_name($species);
-
-    $self->param( "assembly_filename_base", $as );
-
     my $root_output_dir = $self->param_required('output_root');
+    my $species         = $self->param_required('species_name');
+    my $assembly_name   = $self->param_required('assembly_name');
 
-    my $assembly_output_dir = "$root_output_dir/$sp/$as";
-    $self->param( "assembly_output_dir", $assembly_output_dir );
+    $assembly_name = $self->sanitize_file_name($assembly_name);
+    $species       = $self->sanitize_file_name($species);
+
+    my $assembly_location =
+      assembly_location( $root_output_dir, $species, $assembly_name );
+
+    $self->param( "assembly_filename_base", $assembly_name );
+    $self->param( "assembly_output_dir",    $assembly_location->location );
+    return $assembly_location;
 }
 
 sub fetch_assembly_requirements {
-    my ($self) = @_;
+    my ( $self, $assembly_location ) = @_;
 
     $self->param_required('fasta_uri');
 
+    #TODO
     my $as_index_programs = $self->param_required('assembly_index_programs');
 
     my $fasta_file = $self->param_required('fasta_file');
@@ -86,19 +89,18 @@ sub fetch_assembly_requirements {
 }
 
 sub fetch_annotation_requirements {
-    my ($self) = @_;
+    my ( $self, $assembly_location ) = @_;
 
     my $annot_index_programs =
       $self->param_required('annotation_index_programs');
+    my $annotation_name = $self->param_required("annotation_name");
+    $annotation_name = $self->sanitize_file_name($annotation_name);
 
-    my $assembly_output_dir = $self->param("assembly_output_dir");
-    my $annotation          = $self->param_required("annotation_name");
-    my $as                  = $self->param("assembly_filename_base");
+    my $annotation = $assembly_location->annotation($annotation_name);
+    my $as         = $assembly_location->assembly_name;
 
-    my $an = $self->sanitize_file_name($annotation);
-    $self->param( "annotation_output_dir",
-        "$assembly_output_dir/annotation/$an" );
-    $self->param( "annotation_filename_base", $as . '_' . $an );
+    $self->param( "annotation_output_dir",    $annotation->location );
+    $self->param( "annotation_filename_base", $annotation->file_name_base );
 
     my $gtf_file = $self->param_required('gtf_file');
     if ( $gtf_file !~ /\.gtf\.gz$/ ) {
@@ -108,23 +110,27 @@ sub fetch_annotation_requirements {
     if ( !-e $gtf_file ) {
         $self->throw("$gtf_file does not exist");
     }
+
+    return $annotation;
 }
 
 sub fetch_input {
     my ($self) = @_;
 
-    $self->fetch_core_requirements();
-
     #core requirements
+    my $assembly_location = $self->fetch_core_requirements();
+    $self->param( "assembly_location", $assembly_location );
 
     #assembly mode
     if ( $self->param("do_assembly") ) {
-        $self->fetch_assembly_requirements();
+        $self->fetch_assembly_requirements($assembly_location);
     }
 
     #annotation mode
     if ( $self->param("do_annotation") ) {
-        $self->fetch_annotation_requirements();
+        my $annotation_location =
+          $self->fetch_annotation_requirements($assembly_location);
+        $self->param( "annotation_location", $annotation_location );
     }
 
 }
@@ -132,32 +138,30 @@ sub fetch_input {
 sub run {
     my ($self) = @_;
 
-    my $as_index_programs   = $self->param('assembly_index_programs');
-    my $assembly_output_dir = $self->param("assembly_output_dir");
+    my $as_index_programs = $self->param('assembly_index_programs');
+    my $assembly_location = $self->param('assembly_location');
 
-    my %dirs_created;
-
-    $dirs_created{"dir_base"} = $assembly_output_dir;
-
-    for my $dir (qw(genome_fasta mappability annotation)) {
-        my $target = "$assembly_output_dir/$dir";
-        $dirs_created{"dir_$dir"} = $target;
-    }
+    my %dirs_created = (
+        dir_base         => $assembly_location->location,
+        dir_genome_fasta => $assembly_location->genome_fasta_location,
+        dir_mappability  => $assembly_location->mappability_location,
+        dir_annotation   => $assembly_location->annotation_location,
+    );
 
     for my $index_prog (@$as_index_programs) {
-        my $target = "$assembly_output_dir/genome_index/$index_prog";
-        $dirs_created{"dir_index_$index_prog"} = $target;
+        $dirs_created{"dir_index_$index_prog"} =
+          $assembly_location->genome_index_location($index_prog);
     }
 
     if ( $self->param("do_annotation") ) {
-        my $annotation_output_dir = $self->param("annotation_output_dir");
-        my $an_index_programs     = $self->param("annotation_index_programs");
+        my $an_index_programs   = $self->param("annotation_index_programs");
+        my $annotation_location = $self->param('annotation_location');
 
-        $dirs_created{"dir_annotation_base"} = $annotation_output_dir;
+        $dirs_created{"dir_annotation_base"} = $annotation_location->location;
 
         for my $index_prog (@$an_index_programs) {
-            my $target = "$annotation_output_dir/$index_prog";
-            $dirs_created{"dir_annot_index_$index_prog"} = $target;
+            $dirs_created{"dir_annot_index_$index_prog"} =
+              $annotation_location->annotation_index_location($index_prog);
         }
     }
 

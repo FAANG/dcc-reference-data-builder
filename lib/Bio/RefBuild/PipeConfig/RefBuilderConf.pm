@@ -209,6 +209,10 @@ sub _pipeline_analyses_mappability_tasks {
                         bigwig   => '#kmer_out_dir#/#name#.bw',
                         bedgraph => '#kmer_out_dir#/#name#.bg',
                         bam      => '#kmer_out_dir#/#name#.bam',
+                        mappable_pos_bedgraph =>
+                          '#kmer_out_dir#/#name#.mappable_pos.bg',
+                        mappable_pos_bigwig =>
+                          '#kmer_out_dir#/#name#.mappable_pos.bw',
                     }
                 },
             }
@@ -280,7 +284,7 @@ sub _pipeline_analyses_mappability_tasks {
             -flow_into => {
                 1 => {
                     ':////accu?sorted_bam=[]' => {},
-                    'rm_file' => { file => '#bam#' },
+                    'rm_file'                 => { file => '#bam#' },
                 }
             },
         },
@@ -320,9 +324,42 @@ sub _pipeline_analyses_mappability_tasks {
             },
             -flow_into => {
                 1 => {
-                    'rm_file'          => { file     => '#bam#' },
+                    'mappable_pos'     => {},
                     'bedGraphToBigWig' => { bedgraph => '#bedgraph#', },
 
+                }
+            }
+        },
+        {
+            -logic_name => 'mappable_pos',
+            -rc_name    => '400Mb_job',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                cmd =>
+'#samtools# view #bam# | awk \'BEGIN{FS="\t";OFS=FS}{print $3,$4-1,$4,1}\' | #wiggletools# write_bg - - > #mappable_pos_bedgraph#',
+                expected_file => '#mappable_pos_bedgraph#',
+            },
+            -flow_into => {
+                1 => {
+
+                    'rm_file'             => { file => '#bam#' },
+                    'mappable_pos_bb' => {},
+
+                }
+            }
+        },
+        {
+            -logic_name => 'mappable_pos_bb',
+            -rc_name    => '2Gb_job',
+            -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
+            -parameters => {
+                cmd =>
+'#bedGraphToBigWig# #mappable_pos_bedgraph# #chrom_sizes# #mappable_pos_bigwig#',
+                expected_file => '#mappable_pos_bigwig#',
+            },
+            -flow_into => {
+                1 => {
+                    'rm_file' => { file => '#mappable_pos_bedgraph#' },
                 }
             }
         },
@@ -431,7 +468,7 @@ sub _pipeline_analyses_assembly {
                 cmd =>
 '#cram_seq_cache_populate_script# -root #cram_cache_root# -subdirs #cram_cache_num_subdirs# #fasta#'
             },
-        },        
+        },
         {
             -logic_name => 'samtools_fai',
             -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
@@ -504,7 +541,7 @@ sub _pipeline_analyses_assembly {
         {
             -logic_name => 'bismark_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => '10Gb_job',
+            -rc_name    => '15Gb_job',
             -parameters => {
                 cmd =>
 '#bismark_dir#/bismark_genome_preparation --path_to_bowtie #bowtie1_dir# --yes_to_all #dir_index_bismark#',
@@ -575,7 +612,7 @@ sub _pipeline_analyses_annotation {
 
 # adapted fromhttps://gist.github.com/igordot/4467f1b02234ff864e61 ref flat from gtf
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => '400Mb_job',
+            -rc_name    => '1Gb_job',
             -parameters => {
                 cmd =>
 '#gtfToGenePred# -genePredExt -geneNameAsName2 #gtf# /dev/stdout | awk \'BEGIN{OFS="\t";FS="\t"}{print $12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10}\' | gzip -c > #ref_flat#',
@@ -584,7 +621,7 @@ sub _pipeline_analyses_annotation {
         {
             -logic_name => 'rsem_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => '1Gb_job',
+            -rc_name    => '2Gb_job',
             -parameters => {
                 cmd =>
 '#rsem_dir#/rsem-prepare-reference -q --gtf #gtf# --bowtie --bowtie-path #bowtie1_dir# --bowtie2 --bowtie2-path #bowtie2_dir# #fasta# #dir_annot_index_rsem#/#annotation_base_name#'
@@ -593,7 +630,7 @@ sub _pipeline_analyses_annotation {
         {
             -logic_name => 'rsem_polya_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => '1Gb_job',
+            -rc_name    => '2Gb_job',
             -parameters => {
                 cmd =>
 '#rsem_dir#/rsem-prepare-reference -q --polyA --gtf #gtf# --bowtie --bowtie-path #bowtie1_dir# --bowtie2 --bowtie2-path #bowtie2_dir# #fasta# #dir_annot_index_rsem_polya#/#annotation_base_name#_polya'
@@ -657,6 +694,7 @@ sub resource_classes {
         '6Gb_job'   => 6 * $gb,
         '7Gb_job'   => 7 * $gb,
         '10Gb_job'  => 10 * $gb,
+        '15Gb_job'  => 10 * $gb,
     );
 
     my %resources = (
