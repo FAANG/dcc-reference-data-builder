@@ -1,0 +1,1 @@
+I'm here to help verify that the list dir method only returns directories, not files
