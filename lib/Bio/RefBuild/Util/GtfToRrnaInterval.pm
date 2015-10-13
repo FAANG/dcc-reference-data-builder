@@ -3,6 +3,7 @@ package Bio::RefBuild::Util::GtfToRrnaInterval;
 use strict;
 use Moose;
 use Bio::EnsEMBL::IO::Parser::GTF;
+use namespace::autoclean;
 
 has 'in_fh'   => ( is => 'rw', isa => 'FileHandle' );
 has 'out_fh'  => ( is => 'rw', isa => 'FileHandle' );
@@ -44,5 +45,5 @@ sub convert {
         }
     }
 }
-
+__PACKAGE__->meta->make_immutable;
 1;
