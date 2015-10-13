@@ -7,7 +7,6 @@ use base ('Bio::EnsEMBL::Hive::Process');
 
 use autodie;
 use Bio::RefBuild::Util::GtfToRrnaInterval;
-use PerlIO::gzip;
 
 sub fetch_input {
     my ($self) = @_;
@@ -20,18 +19,20 @@ sub fetch_input {
 sub run {
     my ($self) = @_;
 
-    $self->dbc and $self->dbc->disconnect_when_inactive(1);    # release this connection for the duration of task
+    $self->dbc
+      and $self->dbc->disconnect_when_inactive(1)
+      ;    # release this connection for the duration of task
 
     my $gtf_fh;
     my $gtf = $self->param_required('gtf');
 
     if ( $gtf =~ m/\.gz$/ ) {
-        open( $gtf_fh, '<:gzip', $gtf );
+        open( my $gtf_fh, '-|', 'gzip', '-dc', $gtf );
     }
     else {
         open( $gtf_fh, '<', $gtf );
     }
-    
+
     open( my $dict_fh,          '<', $self->param_required('dict') );
     open( my $rrna_interval_fh, '>', $self->param_required('rrna_interval') );
 
