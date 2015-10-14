@@ -24,15 +24,15 @@ perl:
   - "5.16"
   
 before_install:
-    - git clone --branch version/2.3 --depth 1 https://github.com/Ensembl/ensembl-hive.git
-    - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl-io.git
+    - git clone --branch version/2.3 --depth 1 https://github.com/Ensembl/ensembl-hive.git ~/ensembl-hive
+    - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl-io.git ~/ensembl-io
     - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl-test.git
     - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl.git
     - export CWD=$PWD
     - export DEPS=$HOME/dependencies
     - mkdir -p $DEPS
     - cd $DEPS
-    - $CWD/ensembl-io/travisci/get_dependencies.sh
+    - ~/ensembl-io/travisci/get_dependencies.sh
     - cd $CWD
     - "cpanm Module::Build::Pluggable Module::Build::Pluggable::CPANfile"
     
