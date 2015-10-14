@@ -44,7 +44,7 @@ install:
     - export MACHTYPE=$(uname -m)
     - export CFLAGS="-fPIC"
     - cd $DEPS
-    - ~ensembl-io/travisci/build_c.sh
+    - ~/ensembl-io/travisci/build_c.sh
     - cd $CWD
     - cpanm -v --installdeps --with-recommends --notest --cpanfile ensembl/cpanfile .
     - cpanm -v --installdeps --notest .
