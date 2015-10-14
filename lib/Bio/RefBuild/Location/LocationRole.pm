@@ -2,6 +2,7 @@ package Bio::RefBuild::Location::LocationRole;
 
 use strict;
 use Moose::Role;
+use autodie;
 
 requires 'dir_elements';
 
@@ -35,7 +36,8 @@ sub list_dirs {
     opendir( my $dh, $location );
 
     my @dirs = sort grep { -d "$location/$_" && !/^\.{1,2}$/ } readdir($dh);
-    close $dh;
+    
+    closedir($dh);
 
     return @dirs;
 }
