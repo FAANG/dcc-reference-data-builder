@@ -1,12 +1,56 @@
 language: perl
 sudo: false
+
+cache:
+  apt: false
+  directories:
+    - $HOME/perl5/perlbrew
+    - $HOME/dependencies
+
+addons:
+  apt:
+    packages:
+      - unzip
+      - mysql-server-5.5
+      - apache2
+      - libmysqlclient-dev
+      - libpng12-dev
+      - libssl-dev
+      - openssl
+      - mysql-client-5.5
+      - mysql-client-core-5.5
+    
 perl:
   - "5.16"
+  
 before_install:
-    - "git clone https://github.com/Ensembl/ensembl-hive.git ~/ensembl-hive"
-    - "git clone https://github.com/Ensembl/ensembl-io.git ~/ensembl-io; cd ~/ensembl-io; git checkout master"
-    - "cpanm -n Devel::Cover::Report::Coveralls"
+    - git clone --branch version/2.3 --depth 1 https://github.com/Ensembl/ensembl-hive.git
+    - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl-io.git
+    - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl-test.git
+    - git clone --branch master --depth 1 https://github.com/Ensembl/ensembl.git
+    - export CWD=$PWD
+    - export DEPS=$HOME/dependencies
+    - mkdir -p $DEPS
+    - cd $DEPS
+    - $CWD/ensembl-io/travisci/get_dependencies.sh
+    - cd $CWD
     - "cpanm Module::Build::Pluggable Module::Build::Pluggable::CPANfile"
+    
+install:
+    - export CWD=$PWD
+    - export DEPS=$HOME/dependencies
+    - export KENT_SRC="$DEPS/kent/src"
+    - export SAMTOOLS="$DEPS/samtools"
+    - export MACHTYPE=$(uname -m)
+    - export CFLAGS="-fPIC"
+    - cd $DEPS
+    - $CWD/ensembl-io/travisci/build_c.sh
+    - cd $CWD
+    - cpanm -v --installdeps --with-recommends --notest --cpanfile ensembl/cpanfile .
+    - cpanm -v --installdeps --notest .
+    - cpanm -n Devel::Cover::Report::Coveralls
+    - cpanm -n DBD::SQLite    
+    
 env:
   global:
     -PERL5LIB=$PERL5LIB:~/ensembl-hive/modules:~/ensembl-io/modules  
