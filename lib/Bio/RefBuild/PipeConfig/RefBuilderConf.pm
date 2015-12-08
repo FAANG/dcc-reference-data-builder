@@ -242,9 +242,10 @@ sub _pipeline_analyses_mappability_tasks {
             -logic_name => 'fasta_kmers_factory',
             -module => 'Bio::GenomeSignalTracks::Process::FastaKmerSplitter',
             -parameters => {
-                gzip        => 1,
-                split_limit => 250_000_000,
-                output_dir  => '#kmer_out_dir#',
+                gzip         => 1,
+                split_limit  => 250_000_000,
+                output_dir   => '#kmer_out_dir#',
+                no_ambiguity => 1,
             },
             -rc_name   => '2Gb_job',
             -flow_into => {
@@ -343,13 +344,13 @@ sub _pipeline_analyses_mappability_tasks {
                 1 => {
 
                     'rm_file'         => { file => '#bam#' },
-                    'mappable_pos_bb' => {},
+                    'mappable_pos_bw' => {},
 
                 }
             }
         },
         {
-            -logic_name => 'mappable_pos_bb',
+            -logic_name => 'mappable_pos_bw',
             -rc_name    => '2Gb_job',
             -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
             -parameters => {
@@ -538,20 +539,11 @@ sub _pipeline_analyses_assembly {
         {
             -logic_name => 'bismark_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => '15Gb_job',
+            -rc_name    => '12Gb_job',
             -parameters => {
                 cmd =>
 '#bismark_dir#/bismark_genome_preparation --path_to_bowtie #bowtie1_dir# --yes_to_all #dir_index_bismark#',
             },
-            -flow_into => ['post_bismark_index'],
-        },
-        {
-            -logic_name => 'post_bismark_index',
-            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
-            -rc_name    => 'default',
-            -parameters =>
-              { cmd => 'rm -f #dir_index_bismark#/#assembly_base_name#.fa', },
-
         },
     );
 }
@@ -604,15 +596,16 @@ sub _pipeline_analyses_annotation {
                 dir_annotation_base  => '#dir_annotation_base#',
                 annotation_base_name => '#annotation_base_name#',
             },
-        }{
-            -logic_name   => 'rrna_interval',
-              -module     => 'Bio::RefBuild::Process::GtfToRrnaIntervalProcess',
-              -rc_name    => '200Mb_job',
-              -parameters => {
+        },
+        {
+            -logic_name => 'rrna_interval',
+            -module     => 'Bio::RefBuild::Process::GtfToRrnaIntervalProcess',
+            -rc_name    => '200Mb_job',
+            -parameters => {
                 gtf           => '#gtf',
                 dict          => '#dict#',
                 rrna_interval => '#rrna_interval#'
-              },
+            },
         },
         {
             -logic_name => 'ref_flat',
@@ -701,13 +694,13 @@ sub resource_classes {
         '6Gb_job'   => 6 * $gb,
         '7Gb_job'   => 7 * $gb,
         '10Gb_job'  => 10 * $gb,
-        '15Gb_job'  => 15 * $gb,
+        '12Gb_job'  => 12 * $gb,
     );
 
     my %resources = (
         'star_job' => {
             'LSF' =>
-"-M35000 -q $lsf_queue_name -n4 -R\"span[hosts=1]  select[mem>35000] rusage[mem=35000]\" $lsf_std_param",
+"-M38000 -q $lsf_queue_name -n4 -R\"span[hosts=1]  select[mem>38000] rusage[mem=38000]\" $lsf_std_param",
         },
     );
 
