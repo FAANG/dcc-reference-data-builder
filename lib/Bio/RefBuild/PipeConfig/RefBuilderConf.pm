@@ -584,7 +584,7 @@ sub _pipeline_analyses_annotation {
             -flow_into => [
                 'gtf_to_beds', 'rrna_interval',
                 'rsem_index',  'rsem_polya_index',
-                'star_index'
+                'star_index_prep'
             ],
         },
         {
@@ -637,12 +637,20 @@ sub _pipeline_analyses_annotation {
             },
         },
         {
+            -logic_name => 'star_index_prep',
+            -module =>
+              'Bio::RefBuild::Process::StarGenomeGenerateParamsProcess',
+            -rc_name    => 'default',
+            -parameters => { fasta_file => '#fasta#' },
+            flow_into   => 'star_index',
+        },
+        {
             -logic_name => 'star_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
             -rc_name    => 'star_job',
             -parameters => {
                 cmd =>
-'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_annot_index_star# --genomeFastaFiles #fasta# --sjdbGTFfile #gtf#',
+'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_annot_index_star# --genomeFastaFiles #fasta# --sjdbGTFfile #gtf# --genomeChrBinNbits #genomeChrBinNbuts# --genomeSAindexNbases #genomeSAindexNbases#',
             },
         },
     );
