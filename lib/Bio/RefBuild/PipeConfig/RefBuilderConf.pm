@@ -38,7 +38,7 @@ sub default_options {
     my ($self) = @_;
     return {
         %{ $self->SUPER::default_options() },
-        assembly_index_programs   => [qw(bismark bwa bowtie1 bowtie2)],
+        assembly_index_programs   => [qw(bismark bwa bowtie1 bowtie2 star)],
         annotation_index_programs => [qw(rsem rsem_polya star)],
         pipeline_name             => 'ref_builder',
         lsf_std_param             => '',
@@ -455,7 +455,7 @@ sub _pipeline_analyses_assembly {
                 'picard_dict',       'samtools_fai',
                 'bowtie1_index',     'bowtie2_index',
                 'pre_bismark_index', 'populate_cram_cache',
-                'bwa_index'
+                'bwa_index',         'star_index_prep'
             ],
         },
         {
@@ -545,6 +545,23 @@ sub _pipeline_analyses_assembly {
 '#bismark_dir#/bismark_genome_preparation --path_to_bowtie #bowtie1_dir# --yes_to_all #dir_index_bismark#',
             },
         },
+        {
+            -logic_name => 'star_index_prep',
+            -module =>
+              'Bio::RefBuild::Process::StarGenomeGenerateParamsProcess',
+            -rc_name    => 'default',
+            -parameters => { fasta_file => '#fasta#' },
+            flow_into   => 'star_index',
+        },
+        {
+            -logic_name => 'star_index',
+            -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
+            -rc_name    => 'star_job',
+            -parameters => {
+                cmd =>
+'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_index_star# --genomeFastaFiles #fasta# --genomeChrBinNbits #genomeChrBinNbuts# --genomeSAindexNbases #genomeSAindexNbases#',
+            },
+        },
     );
 }
 
@@ -597,7 +614,7 @@ sub _pipeline_analyses_annotation {
                 exon_filtered_gtf => '#exon_filtered_gtf#',
             },
             -flow_into =>
-              [ 'rsem_index', 'rsem_polya_index', 'star_index_prep' ],
+              [ 'rsem_index', 'rsem_polya_index', 'star_guided_index_prep' ],
         }{
             -logic_name   => 'gtf_to_beds',
               -module     => 'Bio::RefBuild::Process::GtfToBedsProcess',
@@ -649,15 +666,15 @@ sub _pipeline_analyses_annotation {
             },
         },
         {
-            -logic_name => 'star_index_prep',
+            -logic_name => 'star_guided_index_prep',
             -module =>
               'Bio::RefBuild::Process::StarGenomeGenerateParamsProcess',
             -rc_name    => 'default',
             -parameters => { fasta_file => '#fasta#' },
-            flow_into   => 'star_index',
+            flow_into   => 'star_guided_index',
         },
         {
-            -logic_name => 'star_index',
+            -logic_name => 'star_guided_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
             -rc_name    => 'star_job',
             -parameters => {
