@@ -15,6 +15,7 @@ sub fetch_input {
 }
 
 sub write_output {
+    my ($self) = @_;
     my $fasta_file_name = $self->param_required('fasta_file');
 
     my $in_fh;
