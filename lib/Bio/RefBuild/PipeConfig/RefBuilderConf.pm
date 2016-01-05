@@ -85,6 +85,7 @@ sub default_options {
     dir_index_bowtie1
     dir_index_bowtie2
     dir_index_bwa
+    dir_index_star
 
     manifest
     assembly_base_name
@@ -615,15 +616,16 @@ sub _pipeline_analyses_annotation {
             },
             -flow_into =>
               [ 'rsem_index', 'rsem_polya_index', 'star_guided_index_prep' ],
-        }{
-            -logic_name   => 'gtf_to_beds',
-              -module     => 'Bio::RefBuild::Process::GtfToBedsProcess',
-              -rc_name    => '200Mb_job',
-              -parameters => {
+        },
+        {
+            -logic_name => 'gtf_to_beds',
+            -module     => 'Bio::RefBuild::Process::GtfToBedsProcess',
+            -rc_name    => '200Mb_job',
+            -parameters => {
                 gtf                  => '#gtf#',
                 dir_annotation_base  => '#dir_annotation_base#',
                 annotation_base_name => '#annotation_base_name#',
-              },
+            },
         },
         {
             -logic_name => 'rrna_interval',
@@ -635,10 +637,8 @@ sub _pipeline_analyses_annotation {
                 rrna_interval => '#rrna_interval#'
             },
         },
-        {
+        { # adapted from https://gist.github.com/igordot/4467f1b02234ff864e61 ref flat from gtf
             -logic_name => 'ref_flat',
-
-# adapted fromhttps://gist.github.com/igordot/4467f1b02234ff864e61 ref flat from gtf
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
             -rc_name    => '1Gb_job',
             -parameters => {
@@ -646,7 +646,6 @@ sub _pipeline_analyses_annotation {
 '#gtfToGenePred# -genePredExt -geneNameAsName2 #gtf# /dev/stdout | awk \'BEGIN{OFS="\t";FS="\t"}{print $12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10}\' | gzip -c > #ref_flat#',
             },
         },
-
         {
             -logic_name => 'rsem_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
@@ -695,7 +694,7 @@ sub _pipeline_analyses_manifest {
             -parameters => {
                 cmd =>
 'find #dir_base# -type f -printf \'%p\t%s\t\' -execdir sh -c \'md5sum "{}" | sed s/\ .*//\' \; > #manifest#',
-                expected_file => '#manifest#'
+                expected_file => '#manifest#',
             },
         },
     );
