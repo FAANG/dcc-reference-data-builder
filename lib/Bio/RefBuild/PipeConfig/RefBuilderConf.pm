@@ -570,8 +570,9 @@ sub _pipeline_analyses_annotation {
                 expected_file           => '#gtf_gz#',
                 expected_file_num_lines => '#annotation_line_count#'
             },
-            -flow_into => [ 'ref_flat', ],
+            -flow_into => ['ref_flat'],
         },
+
         {
             -logic_name => 'unzip_annotation',
             -module     => 'Bio::RefBuild::Process::CautiousSystemCommand',
@@ -583,19 +584,29 @@ sub _pipeline_analyses_annotation {
             },
             -flow_into => [
                 'gtf_to_beds', 'rrna_interval',
-                'rsem_index',  'rsem_polya_index',
-                'star_index_prep'
+                'filter_gtf',
+
             ],
         },
         {
-            -logic_name => 'gtf_to_beds',
-            -module     => 'Bio::RefBuild::Process::GtfToBedsProcess',
-            -rc_name    => '200Mb_job',
+            -logic_name => 'filter_gtf',
+            -module     => 'Bio::RefBuild::Process::FilterGtfForExonsProcess',
+            -rc_name    => 'default',
             -parameters => {
+                gtf               => '#gtf#',
+                exon_filtered_gtf => '#exon_filtered_gtf#',
+            },
+            -flow_into =>
+              [ 'rsem_index', 'rsem_polya_index', 'star_index_prep' ],
+        }{
+            -logic_name   => 'gtf_to_beds',
+              -module     => 'Bio::RefBuild::Process::GtfToBedsProcess',
+              -rc_name    => '200Mb_job',
+              -parameters => {
                 gtf                  => '#gtf#',
                 dir_annotation_base  => '#dir_annotation_base#',
                 annotation_base_name => '#annotation_base_name#',
-            },
+              },
         },
         {
             -logic_name => 'rrna_interval',
@@ -618,13 +629,14 @@ sub _pipeline_analyses_annotation {
 '#gtfToGenePred# -genePredExt -geneNameAsName2 #gtf# /dev/stdout | awk \'BEGIN{OFS="\t";FS="\t"}{print $12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10}\' | gzip -c > #ref_flat#',
             },
         },
+
         {
             -logic_name => 'rsem_index',
             -module     => 'Bio::EnsEMBL::Hive::RunnableDB::SystemCmd',
             -rc_name    => '2Gb_job',
             -parameters => {
                 cmd =>
-'#rsem_dir#/rsem-prepare-reference -q --gtf #gtf# --bowtie --bowtie-path #bowtie1_dir# --bowtie2 --bowtie2-path #bowtie2_dir# #fasta# #dir_annot_index_rsem#/#annotation_base_name#'
+'#rsem_dir#/rsem-prepare-reference -q --gtf #exon_filtered_gtf# --bowtie --bowtie-path #bowtie1_dir# --bowtie2 --bowtie2-path #bowtie2_dir# #fasta# #dir_annot_index_rsem#/#annotation_base_name#'
             },
         },
         {
@@ -633,7 +645,7 @@ sub _pipeline_analyses_annotation {
             -rc_name    => '2Gb_job',
             -parameters => {
                 cmd =>
-'#rsem_dir#/rsem-prepare-reference -q --polyA --gtf #gtf# --bowtie --bowtie-path #bowtie1_dir# --bowtie2 --bowtie2-path #bowtie2_dir# #fasta# #dir_annot_index_rsem_polya#/#annotation_base_name#_polya'
+'#rsem_dir#/rsem-prepare-reference -q --polyA --gtf #exon_filtered_gtf# --bowtie --bowtie-path #bowtie1_dir# --bowtie2 --bowtie2-path #bowtie2_dir# #fasta# #dir_annot_index_rsem_polya#/#annotation_base_name#_polya'
             },
         },
         {
@@ -650,7 +662,7 @@ sub _pipeline_analyses_annotation {
             -rc_name    => 'star_job',
             -parameters => {
                 cmd =>
-'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_annot_index_star# --genomeFastaFiles #fasta# --sjdbGTFfile #gtf# --genomeChrBinNbits #genomeChrBinNbuts# --genomeSAindexNbases #genomeSAindexNbases#',
+'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_annot_index_star# --genomeFastaFiles #fasta# --sjdbGTFfile #exon_filtered_gtf# --genomeChrBinNbits #genomeChrBinNbuts# --genomeSAindexNbases #genomeSAindexNbases#',
             },
         },
     );

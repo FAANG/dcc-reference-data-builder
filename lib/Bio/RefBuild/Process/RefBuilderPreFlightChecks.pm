@@ -205,6 +205,8 @@ sub write_output {
 
         $params_out{annotation_base_name} = $annotation;
         $params_out{gtf}                  = "$annotation_root/$annotation.gtf";
+        $params_out{exon_filtered_gtf} =
+          "$annotation_root/$annotation.exon_filtered.gtf";
         $params_out{gtf_gz}   = "$annotation_root/$annotation.gtf.gz";
         $params_out{ref_flat} = "$annotation_root/$annotation.ref_flat.gz";
         $params_out{rrna_interval} =

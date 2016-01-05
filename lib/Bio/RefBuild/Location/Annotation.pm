@@ -31,6 +31,11 @@ sub gtf {
     return $self->location . '/' . $self->file_name_base . '.gtf';
 }
 
+sub exon_filtered_gtf {
+    my ($self) = @_;
+    return $self->location . '/' . $self->file_name_base . '.exon_filtered.gtf';
+}
+
 sub ref_flat {
     my ($self) = @_;
     return $self->location . '/' . $self->file_name_base . '.ref_flat';
