@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use base ('Bio::EnsEMBL::Hive::Process');
-
+use Bio::RefBuild::Util::StarGenomeGenerateParams;
 use autodie;
 
 sub fetch_input {
