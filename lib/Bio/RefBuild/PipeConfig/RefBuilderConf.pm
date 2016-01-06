@@ -560,7 +560,7 @@ sub _pipeline_analyses_assembly {
             -rc_name    => 'star_job',
             -parameters => {
                 cmd =>
-'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_index_star# --genomeFastaFiles #fasta# --genomeChrBinNbits #genomeChrBinNbuts# --genomeSAindexNbases #genomeSAindexNbases#',
+'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_index_star# --genomeFastaFiles #fasta# --genomeChrBinNbits #genomeChrBinNbits# --genomeSAindexNbases #genomeSAindexNbases#',
             },
         },
     );
