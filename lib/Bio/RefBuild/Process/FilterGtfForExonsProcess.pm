@@ -16,7 +16,7 @@ sub fetch_input {
 
 }
 
-sub run {
+sub write_output {
     my ($self) = @_;
 
     $self->dbc
@@ -40,7 +40,7 @@ sub run {
         out_fh => $gtf_out_fh,
     );
 
-    $filter->$filter();
+    $filter->filter();
 
     close $gtf_fh;
     close $gtf_out_fh;
