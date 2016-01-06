@@ -678,7 +678,7 @@ sub _pipeline_analyses_annotation {
             -rc_name    => 'star_job',
             -parameters => {
                 cmd =>
-'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_annot_index_star# --genomeFastaFiles #fasta# --sjdbGTFfile #exon_filtered_gtf# --genomeChrBinNbits #genomeChrBinNbuts# --genomeSAindexNbases #genomeSAindexNbases#',
+'#star# --runMode genomeGenerate --runThreadN 4 --genomeDir #dir_annot_index_star# --genomeFastaFiles #fasta# --sjdbGTFfile #exon_filtered_gtf# --genomeChrBinNbits #genomeChrBinNbits# --genomeSAindexNbases #genomeSAindexNbases#',
             },
         },
     );
