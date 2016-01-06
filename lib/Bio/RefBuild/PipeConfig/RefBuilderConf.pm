@@ -552,7 +552,7 @@ sub _pipeline_analyses_assembly {
               'Bio::RefBuild::Process::StarGenomeGenerateParamsProcess',
             -rc_name    => 'default',
             -parameters => { fasta_file => '#fasta#' },
-            flow_into   => 'star_index',
+            -flow_into   => ['star_index'],
         },
         {
             -logic_name => 'star_index',
@@ -670,7 +670,7 @@ sub _pipeline_analyses_annotation {
               'Bio::RefBuild::Process::StarGenomeGenerateParamsProcess',
             -rc_name    => 'default',
             -parameters => { fasta_file => '#fasta#' },
-            flow_into   => 'star_guided_index',
+            -flow_into   => ['star_guided_index'],
         },
         {
             -logic_name => 'star_guided_index',
