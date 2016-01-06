@@ -10,10 +10,9 @@ use Test::More;
 use Bio::EnsEMBL::Hive::Utils::Test qw(standaloneJob);
 
 my $output_base = "$Bin/fake/Homo_sapiens";
-my $annotation =
-  "$output_base/grch38/annotation/gencode22/grch38_gencode22";
-my $fake_exe  = "$Bin/fake/fake_exe";
-my $fake_data = "$Bin/fake/fake_data";
+my $annotation  = "$output_base/grch38/annotation/gencode22/grch38_gencode22";
+my $fake_exe    = "$Bin/fake/fake_exe";
+my $fake_data   = "$Bin/fake/fake_data";
 
 standaloneJob(
     'Bio::RefBuild::Process::RefBuilderPreFlightChecks',
@@ -25,7 +24,7 @@ standaloneJob(
         do_annotation => 1,
 
         #misc
-        assembly_index_programs   => [qw(bismark bwa bowtie1 bowtie2)],
+        assembly_index_programs   => [qw(bismark bwa bowtie1 bowtie2 star)],
         annotation_index_programs => [qw(rsem rsem_polya star)],
         pipeline_name             => 'ref_builder',
         cram_cache_num_subdirs    => 2,
@@ -69,11 +68,12 @@ standaloneJob(
                 dir_annotation   => "$output_base/grch38/annotation",
                 dir_annotation_base =>
                   "$output_base/grch38/annotation/gencode22",
-                  
+
                 dir_index_bismark => "$output_base/grch38/genome_index/bismark",
                 dir_index_bwa     => "$output_base/grch38/genome_index/bwa",
                 dir_index_bowtie1 => "$output_base/grch38/genome_index/bowtie1",
                 dir_index_bowtie2 => "$output_base/grch38/genome_index/bowtie2",
+                dir_index_star    => "$output_base/grch38/genome_index/star",
 
                 dir_annot_index_rsem =>
                   "$output_base/grch38/annotation/gencode22/rsem",
@@ -96,10 +96,12 @@ standaloneJob(
                 annotation_base_name => 'grch38_gencode22',
                 gtf                  => "$annotation.gtf",
                 gtf_gz               => "$annotation.gtf.gz",
-                ref_flat             => "$annotation.ref_flat.gz",
-                rrna_interval        => "$annotation.rrna.interval",
+                exon_filtered_gtf    => "$annotation.exon_filtered.gtf",
+
+                ref_flat      => "$annotation.ref_flat.gz",
+                rrna_interval => "$annotation.rrna.interval",
             },
-            1 #dataflow id
+            1    #dataflow id
         ]
     ]
 );
