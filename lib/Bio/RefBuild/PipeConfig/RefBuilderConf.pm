@@ -601,7 +601,7 @@ sub _pipeline_analyses_annotation {
                 expected_file_num_lines => '#annotation_line_count#'
             },
             -flow_into => [
-                'gtf_to_beds', 'rrna_interval',
+                'rrna_interval',
                 'filter_gtf',
 
             ],
@@ -616,16 +616,6 @@ sub _pipeline_analyses_annotation {
             },
             -flow_into =>
               [ 'rsem_index', 'rsem_polya_index', 'star_guided_index_prep' ],
-        },
-        {
-            -logic_name => 'gtf_to_beds',
-            -module     => 'Bio::RefBuild::Process::GtfToBedsProcess',
-            -rc_name    => '200Mb_job',
-            -parameters => {
-                gtf                  => '#gtf#',
-                dir_annotation_base  => '#dir_annotation_base#',
-                annotation_base_name => '#annotation_base_name#',
-            },
         },
         {
             -logic_name => 'rrna_interval',
