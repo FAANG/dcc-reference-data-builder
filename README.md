@@ -122,6 +122,8 @@ Once the assembly has been processed, you can add gene set annotations to it. Th
     
     beekeeper.pl -url mysql://dbuser:dbpassword@dbhost:dbport/myuser_ref_builder -loop
     
+The pipeline has been most thoroughly tested with Ensembl GTF files. We are also testing it with RefSeq annotation for goat, converted to GTF using the script `scripts/example_gff3_to_gtf_conversion.pl`. For simplicities sake, we reduce the GTF to just exons with gene\_id and transcript\_id attributes for use with RSEM and STAR, since these are the only features they can use.
+    
 ### Write manifest
 
 It can be useful to have a manifest file, listing the size and a checksum value for each file. 
@@ -141,3 +143,4 @@ For ease of use, you can seed all steps in one go:
       "{assembly_name=>'Galgal4',fasta_uri=>'ftp://ftp.ensembl.org/pub/release-80/fasta/gallus_gallus/dna/Gallus_gallus.Galgal4.dna.toplevel.fa.gz',fasta_file=>'Gallus_gallus.Galgal4.dna.toplevel.fa.gz',species_name=>'Gallus gallus',kmer_sizes=>'50,100,150,200',annotation_name=>'e80',gtf_file=>'Gallus_gallus.Galgal4.80.gtf.gz'}"  
     
     beekeeper.pl -url mysql://dbuser:dbpassword@dbhost:dbport/myuser_ref_builder -loop
+    
