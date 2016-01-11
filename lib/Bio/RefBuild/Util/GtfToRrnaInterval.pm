@@ -25,22 +25,26 @@ sub convert {
 
     while ( $parser->next() ) {
         my $attributes    = $parser->get_attributes;
-        my $transcript_id = $attributes->{transcript_id};
+        my $transcript_id = $attributes->{transcript_id} || $attributes->{ID};
         my $gene_type =
              $attributes->{gene_type}
           || $attributes->{gene_biotype}
-          || $attributes->{gbkey}
           || '';
 
+        print $gene_type . "\n";
         if (
-               $parser->get_type() eq 'transcript'
-            && $transcript_id
-            && $gene_type eq 'rRNA'
+            (
+                   $parser->get_type() eq 'transcript'
+                && $transcript_id
+                && $gene_type eq 'rRNA'
+            )
+            || $parser->get_type() eq 'rRNA'
           )
         {
             print $out_fh join( "\t",
-                $parser->get_raw_seqname(), $parser->get_start(),
-                $parser->get_end(),     $parser->get_raw_strand(),
+                $parser->get_raw_seqname(),
+                $parser->get_start(),
+                $parser->get_end(), $parser->get_raw_strand(),
                 $transcript_id )
               . $/;
         }
