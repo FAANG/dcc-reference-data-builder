@@ -29,6 +29,7 @@ sub convert {
         my $gene_type =
              $attributes->{gene_type}
           || $attributes->{gene_biotype}
+          || $attributes->{gbkey}
           || '';
 
         if (
