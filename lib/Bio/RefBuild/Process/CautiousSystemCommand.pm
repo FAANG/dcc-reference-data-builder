@@ -16,16 +16,22 @@ sub run {
 
     my $file                    = $self->param_required('expected_file');
     my $expected_file_num_lines = $self->param('expected_file_num_lines');
-
+    my $min_file_num_lines = $self->param('min_file_num_lines');
+    
     if ( !-e $file ) {
         die "Expected file to be created, but it doesn't exist: $file";
     }
 
-    if ($expected_file_num_lines) {
+    if (defined $expected_file_num_lines || defined $min_file_num_lines) {
         my $line_count = $self->line_count($file);
+        
         if ( $line_count != $expected_file_num_lines ) {
             die
 "Expected $file to contain $expected_file_num_lines lines, it contains $line_count";
+        }
+        if ( $line_count < $min_file_num_lines ) {
+            die
+"Expected $file to contain at least $min_file_num_lines lines, it contains $line_count";
         }
     }
 }
