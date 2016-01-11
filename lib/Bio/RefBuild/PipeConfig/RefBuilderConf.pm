@@ -543,7 +543,7 @@ sub _pipeline_analyses_assembly {
             -rc_name    => '12Gb_job',
             -parameters => {
                 cmd =>
-'#bismark_dir#/bismark_genome_preparation --path_to_bowtie #bowtie1_dir# --yes_to_all #dir_index_bismark#',
+'#bismark_dir#/bismark_genome_preparation --path_to_bowtie #bowtie2_dir# --bowtie2 #dir_index_bismark#',
             },
         },
         {
