@@ -633,7 +633,7 @@ sub _pipeline_analyses_annotation {
             -rc_name    => '1Gb_job',
             -parameters => {
                 cmd =>
-'#gtfToGenePred# -genePredExt -geneNameAsName2 #gtf# /dev/stdout | awk \'BEGIN{OFS="\t";FS="\t"}{print $12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10}\' | gzip -c > #ref_flat#',
+'#gtfToGenePred# -genePredExt #gtf# /dev/stdout | awk \'BEGIN{OFS="\t";FS="\t"}{print $12,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10}\' | gzip -c > #ref_flat#',
             },
         },
         {
